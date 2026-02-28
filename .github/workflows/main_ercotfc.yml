@@ -63,4 +63,4 @@ jobs:
         with:
           app-name: 'ErcotFC'
           slot-name: 'Production'
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_7CCD448D3623480BAED9991B528A3989 }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_D460D1D5A170415F941722D0304C7CB1 }}
