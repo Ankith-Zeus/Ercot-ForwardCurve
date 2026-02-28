@@ -1,0 +1,244 @@
+{
+  "run_id": 408938808857687,
+  "ts": "2026-02-27T19:57:46Z",
+  "batch": {
+    "status": "SUCCESS",
+    "run_id": "fbca8813d4f3efecb377de3b",
+    "batch_size": 1,
+    "esi_ids": [
+      "1008901033585421872100"
+    ],
+    "compute_delta": true,
+    "results": [
+      {
+        "esi_id": "1008901033585421872100",
+        "zone_id": "LZ_HOUSTON",
+        "node_name": "7RNCHSLR_ALL",
+        "final_price_per_mwh": 9155.5477,
+        "status": "SUCCESS",
+        "warnings": []
+      }
+    ]
+  },
+  "components": {
+    "1008901033585421872100": [
+      {
+        "curve_name": "ISO_RMR_After36Months__LZ_HOUSTON",
+        "component_label": "ISO RMR - After 36 Months",
+        "avg_price_per_mwh": 394.1025,
+        "pct_of_total": 4.3
+      },
+      {
+        "curve_name": "ISO_FFSS__ERCOT",
+        "component_label": "ISO FFSS",
+        "avg_price_per_mwh": 347.0599,
+        "pct_of_total": 3.79
+      },
+      {
+        "curve_name": "RUC_Clawback__LZ_HOUSTON",
+        "component_label": "RUC Clawback",
+        "avg_price_per_mwh": 345.3511,
+        "pct_of_total": 3.77
+      },
+      {
+        "curve_name": "CRR_IntrazonalAuctionRev__LZ_HOUSTON",
+        "component_label": "CRR Intrazonal Auction Revenue",
+        "avg_price_per_mwh": 329.1095,
+        "pct_of_total": 3.59
+      },
+      {
+        "curve_name": "ISO_ERCOTAdminFee__LZ_HOUSTON",
+        "component_label": "ISO ERCOT Admin Fee",
+        "avg_price_per_mwh": 317.388,
+        "pct_of_total": 3.47
+      },
+      {
+        "curve_name": "MarketSecuritization_Uplift_N__LZ_HOUSTON",
+        "component_label": "Market Securitization - Uplift",
+        "avg_price_per_mwh": 317.5131,
+        "pct_of_total": 3.47
+      },
+      {
+        "curve_name": "ISO_DayAheadMakeWhole__LZ_HOUSTON",
+        "component_label": "ISO Day-Ahead Make Whole",
+        "avg_price_per_mwh": 313.8244,
+        "pct_of_total": 3.43
+      },
+      {
+        "curve_name": "CRR_BalancingAccount__LZ_HOUSTON",
+        "component_label": "CRR Balancing Account",
+        "avg_price_per_mwh": 309.5605,
+        "pct_of_total": 3.38
+      },
+      {
+        "curve_name": "ISO_BlackStartService__LZ_HOUSTON",
+        "component_label": "ISO Black Start Service",
+        "avg_price_per_mwh": 283.8403,
+        "pct_of_total": 3.1
+      },
+      {
+        "curve_name": "MarketSecuritization_Default_M__LZ_HOUSTON",
+        "component_label": "Market Securitization - Default",
+        "avg_price_per_mwh": 279.3086,
+        "pct_of_total": 3.05
+      },
+      {
+        "curve_name": "AS_ECRS__LZ_HOUSTON",
+        "component_label": "Ancillary Service - ECRS",
+        "avg_price_per_mwh": 278.0476,
+        "pct_of_total": 3.04
+      },
+      {
+        "curve_name": "ISO_PresidioExcepBlkLoadXfer__LZ_HOUSTON",
+        "component_label": "ISO Presidio Exception Block Load Transfer",
+        "avg_price_per_mwh": 272.055,
+        "pct_of_total": 2.97
+      },
+      {
+        "curve_name": "ISO_ElecReliabOrg_ERO__ERCOT",
+        "component_label": "ISO Electric Reliability Organization (ERO)",
+        "avg_price_per_mwh": 260.5287,
+        "pct_of_total": 2.85
+      },
+      {
+        "curve_name": "ISO_EmergencyBasePoint__LZ_HOUSTON",
+        "component_label": "ISO Emergency Base Point",
+        "avg_price_per_mwh": 258.7524,
+        "pct_of_total": 2.83
+      },
+      {
+        "curve_name": "AS_NSRS__LZ_HOUSTON",
+        "component_label": "Ancillary Service - NSRS",
+        "avg_price_per_mwh": 257.2285,
+        "pct_of_total": 2.81
+      },
+      {
+        "curve_name": "ISO_RMR_First36Months__LZ_HOUSTON",
+        "component_label": "ISO RMR - First 36 Months",
+        "avg_price_per_mwh": 257.6593,
+        "pct_of_total": 2.81
+      },
+      {
+        "curve_name": "LoadZoneBasisPrice__7RNCHSLR_ALL",
+        "component_label": "Load-Zone Basis / Congestion Adder",
+        "avg_price_per_mwh": 253.2061,
+        "pct_of_total": 2.77
+      },
+      {
+        "curve_name": "ISO_EmergencyRespSvc_ERS__LZ_HOUSTON",
+        "component_label": "ISO Emergency Response Service (ERS)",
+        "avg_price_per_mwh": 248.4384,
+        "pct_of_total": 2.71
+      },
+      {
+        "curve_name": "CRR_Adjustment__LZ_HOUSTON",
+        "component_label": "CRR Adjustment",
+        "avg_price_per_mwh": 247.6012,
+        "pct_of_total": 2.7
+      },
+      {
+        "curve_name": "ISO_Load_AllocASImbRev__LZ_HOUSTON",
+        "component_label": "ISO Load-Allocated AS Imbalance Revenue",
+        "avg_price_per_mwh": 247.3635,
+        "pct_of_total": 2.7
+      },
+      {
+        "curve_name": "RUC_CapacityShort__LZ_HOUSTON",
+        "component_label": "RUC Capacity Short",
+        "avg_price_per_mwh": 244.658,
+        "pct_of_total": 2.67
+      },
+      {
+        "curve_name": "RUC_Decommittment__LZ_HOUSTON",
+        "component_label": "RUC Decommittment",
+        "avg_price_per_mwh": 244.0303,
+        "pct_of_total": 2.67
+      },
+      {
+        "curve_name": "RUC_Nodal_LRS__7RNCHSLR_ALL",
+        "component_label": "RUC Nodal Load Ratio Share Adder",
+        "avg_price_per_mwh": 241.8556,
+        "pct_of_total": 2.64
+      },
+      {
+        "curve_name": "AS_DRS_Down__LZ_HOUSTON",
+        "component_label": "Ancillary Service - DRS Down",
+        "avg_price_per_mwh": 229.8771,
+        "pct_of_total": 2.51
+      },
+      {
+        "curve_name": "AS_RRS__LZ_HOUSTON",
+        "component_label": "Ancillary Service - RRS",
+        "avg_price_per_mwh": 229.8884,
+        "pct_of_total": 2.51
+      },
+      {
+        "curve_name": "EnergyLosses__7RNCHSLR_ALL",
+        "component_label": "Transmission & Distribution Losses",
+        "avg_price_per_mwh": 229.1871,
+        "pct_of_total": 2.5
+      },
+      {
+        "curve_name": "ISO_RTHighDispLimitOvrd__LZ_HOUSTON",
+        "component_label": "ISO RT High Dispatch Limit Override",
+        "avg_price_per_mwh": 222.3883,
+        "pct_of_total": 2.43
+      },
+      {
+        "curve_name": "AS_DRS_Up__LZ_HOUSTON",
+        "component_label": "Ancillary Service - DRS Up",
+        "avg_price_per_mwh": 220.7578,
+        "pct_of_total": 2.41
+      },
+      {
+        "curve_name": "ISO_VoltageSupport__LZ_HOUSTON",
+        "component_label": "ISO Voltage Support",
+        "avg_price_per_mwh": 208.8142,
+        "pct_of_total": 2.28
+      },
+      {
+        "curve_name": "ISO_Load_AllocRelDepASImbRevNeut__LZ_HOUSTON",
+        "component_label": "ISO Load-Allocated Reliability Deployment AS Imbalance Revenue Neutrality",
+        "avg_price_per_mwh": 206.9083,
+        "pct_of_total": 2.26
+      },
+      {
+        "curve_name": "ISO_BasePointDeviation__LZ_HOUSTON",
+        "component_label": "ISO Base Point Deviation",
+        "avg_price_per_mwh": 200.3068,
+        "pct_of_total": 2.19
+      },
+      {
+        "curve_name": "ISO_RTRNA__LZ_HOUSTON",
+        "component_label": "ISO Real-Time Revenue Neutrality Allocation",
+        "avg_price_per_mwh": 188.1568,
+        "pct_of_total": 2.06
+      },
+      {
+        "curve_name": "CRR_InterzonalAuctionRev__LZ_HOUSTON",
+        "component_label": "CRR Interzonal Auction Revenue",
+        "avg_price_per_mwh": 186.3096,
+        "pct_of_total": 2.03
+      },
+      {
+        "curve_name": "EnergyPrice__7RNCHSLR_ALL",
+        "component_label": "Nodal LMP Energy Component",
+        "avg_price_per_mwh": 117.509,
+        "pct_of_total": 1.28
+      },
+      {
+        "curve_name": "ERCOT_LRS",
+        "component_label": "ERCOT-Wide LRS Scalar (applied to ZONE curves)",
+        "avg_price_per_mwh": 1.05,
+        "pct_of_total": 0.01
+      }
+    ]
+  },
+  "submitted_params": {
+    "esi_ids": "1008901033585421872100",
+    "as_of_date": "2025-12-15",
+    "from_date": "2026-03-01",
+    "to_date": "2026-03-31",
+    "compute_delta": "true"
+  }
+}

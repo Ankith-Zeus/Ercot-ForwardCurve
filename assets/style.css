@@ -1,0 +1,360 @@
+/* Load Montserrat */
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600&display=swap');
+
+/* App-wide typography & base */
+html, body, #root, #_dash-app-content, .app-root { height: 100%; }
+body {
+  margin: 0;
+  font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+               Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif;
+  color: #1a1a1a;
+  background-color: #f7f9fb;
+}
+
+/* Container centers content and constrains width */
+.container {
+  max-width: 1080px;
+  margin: 24px auto;
+  padding: 16px;
+}
+
+/* Card-like surface */
+.surface {
+  background: #ffffff;
+  border: 1px solid #e7eef5;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow:
+    0 1px 1px rgba(16,24,40,0.04),
+    0 2px 4px rgba(16,24,40,0.06);
+}
+
+.header { margin-bottom: 16px; }
+.header h4 { margin: 0 0 6px 0; font-weight: 600; letter-spacing: 0.2px; }
+.header .subtle { color: #6b7280; font-size: 13px; }
+
+
+.header + .form-grid {
+  margin-top: 16px;       /* NEW */
+}
+
+/* Form grid */
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  column-gap: 20px;       /* was 12px */
+  row-gap: 16px;          /* NEW: adds vertical spacing between rows */
+}
+
+
+.form-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;               /* was 6px; improves label -> control spacing */
+}
+
+.form-item label { font-size: 13px; color: #374151; font-weight: 500; }
+
+.col-6  { grid-column: span 6; }
+.col-12 { grid-column: span 12; }
+@media (max-width: 768px) { .col-6 { grid-column: span 12; } }
+
+/* Inputs */
+input[type="text"], textarea, input[type="number"] { font-family: inherit; }
+textarea, input[type="text"], input[type="number"] {
+  padding: 12px 14px;
+  border: 1px solid #dfe6ee;
+  border-radius: 8px;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+  background: #fff;
+}
+textarea:focus, input[type="text"]:focus, input[type="number"]:focus {
+  border-color: #7aa9ff;
+  box-shadow: 0 0 0 3px rgba(0,120,212,0.15);
+}
+
+/* Date picker wrappers (Dash components use react-dates) */
+.DateRangePicker, .DateInput, .DateInput_input { width: 100%; }
+.DateInput_input {
+  border-radius: 8px;
+  border: 1px solid #dfe6ee !important;
+  padding: 8px 10px !important;
+  font-family: inherit !important;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #0a66c2;
+  color: #fff;
+  border: 0;
+  border-radius: 9px;
+  padding: 10px 16px;
+  font-weight: 600;
+  letter-spacing: .2px;
+  cursor: pointer;
+  transition: transform .02s ease, box-shadow .2s ease, background .2s ease;
+  box-shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 1px rgba(16,24,40,.04);
+}
+.btn:hover  { background: #095bab; }
+.btn:active { transform: translateY(1px); }
+
+/* Status area */
+.status {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #e7eef5;
+  background: #f3f7ff;
+  color: #0a2a7a;
+  font-size: 14px;
+  white-space: pre-wrap;
+}
+
+/* Helper spacing */
+.mt-8  { margin-top: 8px; }
+.mt-12 { margin-top: 12px; }
+.mt-16 { margin-top: 16px; }
+.mt-20 { margin-top: 20px; }
+
+/* ===========================
+   Final Price Card Enhancements
+   =========================== */
+
+/* Wrap your final price card div with class "surface price-card" in Python if you want;
+   or apply these styles to .surface that contains the H2. */
+.surface.price-card h2,
+#orch-final-card .surface h2 {
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  margin: 4px 0 0 0;
+  font-size: 32px;
+  line-height: 1.2;
+}
+
+#orch-final-card .surface {
+  /* subtle gradient and accent border to highlight the main KPI */
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  border: 1px solid #cfe3ff;
+  box-shadow:
+    0 1px 1px rgba(16,24,40,0.03),
+    0 4px 10px rgba(10,102,194,0.08);
+}
+
+#orch-final-card .surface .subtle {
+  color: #0a66c2;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+#orch-esi {
+  margin-bottom: 8px;     /* NEW: extra space below the long field */
+}
+
+/* Optional: add a small pill badge next to the price label */
+.kpi-pill {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #0a66c2;
+  background: #e8f1ff;
+  border: 1px solid #cfe3ff;
+  border-radius: 999px;
+}
+
+/* ===========================
+   DataTable (dash_table) — Global
+   =========================== */
+
+/* Ensure all table text uses Montserrat (headers + cells) */
+.dash-table-container .dash-spreadsheet,
+.dash-table-container .dash-spreadsheet * {
+  font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+               Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Compact table density with comfortable line height */
+.dash-table-container .dash-spreadsheet .row,
+.dash-table-container .dash-spreadsheet .cell {
+  line-height: 1.3;
+  font-size: 13px;
+}
+
+/* ===========================
+   DataTable Headers
+   =========================== */
+
+.dash-table-container .dash-spreadsheet-container .dash-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.dash-table-container .dash-spreadsheet-container th {
+  background: #f4f7fb;
+  color: #374151;
+  font-weight: 600;
+  text-transform: none; /* keep natural case */
+  border-bottom: 1px solid #e3ebf5;
+  padding: 10px;
+}
+
+/* Sort indicators and focus ring refinement */
+.dash-table-container .dash-spreadsheet-container th:focus,
+.dash-table-container .dash-spreadsheet-container td:focus {
+  outline: 2px solid rgba(0,120,212,0.25);
+  outline-offset: -2px;
+}
+
+/* ===========================
+   DataTable Body
+   =========================== */
+
+.dash-table-container .dash-spreadsheet-container td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #eef2f7;
+  color: #1f2937;
+}
+
+/* Zebra striping */
+.dash-table-container .dash-spreadsheet-container .dash-cell.row-odd {
+  background: #fbfdff;
+}
+
+/* Hover feedback */
+.dash-table-container .dash-spreadsheet-container .dash-cell:hover {
+  background: #f1f6ff;
+}
+
+/* Numeric alignment for commonly used columns */
+.dash-table-container .dash-spreadsheet-container td[data-dash-column="avg_price_per_mwh"],
+.dash-table-container .dash-spreadsheet-container td[data-dash-column="pct_of_total"],
+.dash-table-container .dash-spreadsheet-container td[data-dash-column="final_price"],
+.dash-table-container .dash-spreadsheet-container td[data-dash-column="component_total"] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* TOTAL row emphasis (matches the code that labels component_label = 'TOTAL') */
+.dash-table-container .dash-spreadsheet-container td[data-dash-row="TOTAL"],
+.dash-table-container .dash-spreadsheet-container td:has(+ td:contains("TOTAL")) {
+  /* fallback: use filter_query styling in Dash props if needed; CSS-only hint here */
+}
+
+.dash-table-container .dash-spreadsheet-container tr:last-child td {
+  /* Assuming you append a TOTAL row at the end in code */
+  font-weight: 700;
+  border-top: 2px solid #cbd6e6;
+  background: #f9fbff;
+}
+
+/* ===========================
+   Components Grid (specific)
+   =========================== */
+
+#orch-components {
+  /* container tweaks via DataTable props; class-level cosmetics here */
+}
+
+/* Make the components grid header slightly more pronounced */
+#orch-components .dash-spreadsheet-container th {
+  background: linear-gradient(180deg, #f7faff 0%, #f1f5fb 100%);
+}
+
+/* ===========================
+   Bin Spine Grid (specific)
+   =========================== */
+
+#orch-bins .dash-spreadsheet-container th {
+  background: #f6faf7;
+}
+
+/* Dim null/empty values in bin table */
+#orch-bins .dash-spreadsheet-container td:empty,
+#orch-bins .dash-spreadsheet-container td:has(> .dash-empty-cell) {
+  color: #9aa4b2;
+}
+
+/* ===========================
+   Tables: Scroll containers
+   =========================== */
+
+#orch-components .dash-table-container .row,
+#orch-bins .dash-table-container .row {
+  /* Better scroll momentum on Mac trackpads, harmless elsewhere */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ===========================
+   Small utilities for layout
+   =========================== */
+
+.tag-muted {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: 11px;
+  color: #4b5563;
+  background: #eef2f7;
+  border: 1px solid #e3e8f0;
+  border-radius: 6px;
+}
+
+/* Montserrat is already imported at the top of your stylesheet */
+
+/* --- Blocky container look is already provided by .container and .surface --- */
+
+/* Stacked metadata list */
+.meta-list {
+  margin: 8px 0 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 180px 1fr; /* label column + value column */
+  row-gap: 8px;
+  column-gap: 12px;
+  align-items: start;
+  font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+               Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif;
+}
+.meta-list dt {
+  margin: 0;
+  font-weight: 600;
+  color: #374151;
+}
+.meta-list dd {
+  margin: 0;
+  color: #111827;
+  word-break: break-word;
+}
+
+/* Center DataTable headers and cells, enforce Montserrat */
+.dash-table-container .dash-spreadsheet-container th,
+.dash-table-container .dash-spreadsheet-container td {
+  text-align: center !important;          /* Center all cells */
+  font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+               Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif !important;
+}
+
+/* If you previously right-aligned numeric columns, neutralize it */
+.dash-table-container .dash-spreadsheet-container td[data-dash-column="avg_price_per_mwh"],
+.dash-table-container .dash-spreadsheet-container td[data-dash-column="pct_of_total"],
+.dash-table-container .dash-spreadsheet-container td[data-dash-column="final_price"],
+.dash-table-container .dash-spreadsheet-container td[data-dash-column="component_total"] {
+  text-align: center !important;
+}
+
+@media (max-width: 768px) {
+  .form-grid {
+    column-gap: 12px;
+    row-gap: 14px;
+  }
+}
+
+#demo-run-select { font-family: 'Montserrat', sans-serif; }
