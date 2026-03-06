@@ -2,14 +2,16 @@
 import os
 import json
 import time
+from dash.exceptions import PreventUpdate
+from narwhals import col
 import requests
 from uuid import uuid4
 from pathlib import Path
 from datetime import datetime
 import hashlib
-
+import uuid
 from dash import Dash, html, dcc, dash_table, Input, Output, State, no_update, ctx
-
+from dash.dependencies import ClientsideFunction
 # =========================================
 # .env loader (no external dependencies)
 # =========================================
@@ -54,27 +56,58 @@ AUDIT_TABLE_FQN = os.getenv("AUDIT_TABLE_FQN", f"{UC_CATALOG}.{UC_SCHEMA}.crud_a
 # Tables exposed in CRUD tab (short names or FQN)
 CRUD_TABLES = [s.strip() for s in os.getenv(
     "CRUD_TABLES",
-    "meter_master,cost_component_mapping,product_definitions"
+    "meter_master,cost_component_mapping,product_definitions,forward_curve_data_v3"
 ).split(",") if s.strip()]
 
 # Per-table PK & editable columns
 TABLE_CONFIG = {
     "meter_master": {
         "pk": "esi_id",
-        "editable_cols": "ALL",   # all except PK
-    },
-    "cost_component_mapping": {
-        "pk": "id",               # ensure this exists; otherwise UI becomes read-only
-        "editable_cols": [
-            "cost_level", "cost_type", "load_zone", "resource_node",
-            "price_formula", "formula_type", "description"
-        ],
-    },
-    "product_definitions": {
-        "pk": "id",
         "editable_cols": "ALL",
     },
+
+    "cost_component_mapping": {
+        # price_formula is the natural unique key
+        "pk": "price_formula",
+        "editable_cols": [
+            "cost_level",
+            "cost_type",
+            "load_zone",
+            "resource_node",
+            "formula_type",
+            "is_multiplier",
+            "description"
+        ],
+    },
+
+    "product_definitions": {
+        # product name is unique
+        "pk": "product",
+        "editable_cols": [
+            "From_Month",
+            "To_Month",
+            "From_Hr",
+            "To_Hr",
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+            "Sunday"
+        ],
+    },
+
+    "forward_curve_data_v3": {
+        # Curve acts as identifier for updates in UI
+        "pk": ["Curve","asOfDate","startDate","endDate","Product"],
+        "editable_cols": [
+            "price"
+        ],
+    },
 }
+
+
 
 # --------------------------
 # Simple file-based cache
@@ -316,7 +349,7 @@ def _get_table_columns(table_fqn: str) -> list[str]:
     cols, _ = _execute(q, fetch=True)
     return cols
 
-def crud_read_table(table_name: str, limit=500, columns=None, where=None):
+def crud_read_table(table_name: str, limit=5000, columns=None, where=None):
     """
     Read rows from table using the SQL connector.
     Returns (columns, data_rows_as_list_of_dicts).
@@ -329,12 +362,18 @@ def crud_read_table(table_name: str, limit=500, columns=None, where=None):
     where = where or {}
     predicates = []
     params = {}
+
     for i, (k, v) in enumerate(where.items()):
         ph = f"p{i}"
         predicates.append(f"{k} = :{ph}")
         params[ph] = v
+
     where_sql = (" WHERE " + " AND ".join(predicates)) if predicates else ""
-    q = f"SELECT {', '.join(cols)} FROM {table_fqn}{where_sql} LIMIT {int(limit)}"
+
+    limit_sql = f" LIMIT {int(limit)}" if limit else ""
+
+    q = f"SELECT {', '.join(cols)} FROM {table_fqn}{where_sql}{limit_sql}"
+
     _, data = _execute(q, params, fetch=True)
     return cols, data
 
@@ -387,6 +426,23 @@ def crud_row_history(table_name: str, pk_col: str, pk_val: str | int, max_versio
 
     return {"status": "SUCCESS", "timeline": timeline}
 
+def list_uc_tables(catalog: str = UC_CATALOG, schema: str = UC_SCHEMA) -> list[str]:
+    """
+    List tables using SHOW TABLES IN <catalog>.<schema>, which is reliable across UC.
+    Returns fully qualified names: <catalog>.<schema>.<table_name>
+    """
+    # SHOW TABLES IN returns columns: database, tableName, isTemporary
+    q = f"SHOW TABLES IN `{catalog}`.`{schema}`"
+    _, rows = _execute(q, fetch=True)  # no params needed for SHOW TABLES
+    out = []
+    for r in rows or []:
+        # Databricks returns 'tableName' key (camelCase)
+        tname = r.get("tableName") or r.get("tablename") or r.get("TABLE_NAME")
+        if tname:
+            out.append(f"{catalog}.{schema}.{tname}")
+    return out
+
+
 def _insert_rows(table_fqn: str, rows: list[dict]) -> int:
     if not rows:
         return 0
@@ -402,39 +458,60 @@ def _insert_rows(table_fqn: str, rows: list[dict]) -> int:
             count += 1
     return count
 
-def _update_rows(table_fqn: str, pk: str, rows: list[dict]) -> int:
+def _update_rows(table_fqn: str, pk, rows: list[dict]) -> int:
     if not rows:
         return 0
+
+    pk_cols = pk if isinstance(pk, list) else [pk]
+
     count = 0
     with get_sql_connection() as conn, conn.cursor() as cur:
         for r in rows:
-            if pk not in r:
+
+            if any(k not in r for k in pk_cols):
                 continue
-            set_cols = [c for c in r.keys() if c != pk]
+
+            set_cols = [c for c in r.keys() if c not in pk_cols]
             if not set_cols:
                 continue
+
             set_sql = ", ".join([f"{c} = :{c}" for c in set_cols])
+            where_sql = " AND ".join([f"{k} = :pk_{k}" for k in pk_cols])
+
             params = {c: r.get(c) for c in set_cols}
-            params["pk"] = r.get(pk)
-            q = f"UPDATE {table_fqn} SET {set_sql} WHERE {pk} = :pk"
+
+            for k in pk_cols:
+                params[f"pk_{k}"] = r.get(k)
+
+            q = f"UPDATE {table_fqn} SET {set_sql} WHERE {where_sql}"
+
             cur.execute(q, params)
             count += 1
+
     return count
 
-def _delete_rows(table_fqn: str, pk: str, pk_values: list) -> int:
+def _delete_rows(table_fqn: str, pk, pk_values: list) -> int:
     if not pk_values:
         return 0
-    # Chunk deletes to keep parameter lists reasonable
-    CHUNK = 500
+
+    pk_cols = pk if isinstance(pk, list) else [pk]
+
     total = 0
     with get_sql_connection() as conn, conn.cursor() as cur:
-        for i in range(0, len(pk_values), CHUNK):
-            chunk = pk_values[i:i+CHUNK]
-            placeholders = ", ".join([f":p{j}" for j in range(len(chunk))])
-            params = {f"p{j}": v for j, v in enumerate(chunk)}
-            q = f"DELETE FROM {table_fqn} WHERE {pk} IN ({placeholders})"
+        for row in pk_values:
+
+            if isinstance(pk, list):
+                where_sql = " AND ".join([f"{c} = :{c}" for c in pk_cols])
+                params = {c: row[c] for c in pk_cols}
+            else:
+                where_sql = f"{pk} = :pk"
+                params = {"pk": row}
+
+            q = f"DELETE FROM {table_fqn} WHERE {where_sql}"
             cur.execute(q, params)
-            total += len(chunk)
+
+            total += 1
+
     return total
 
 def _log_audit(action: str, table_fqn: str, details: dict):
@@ -647,7 +724,7 @@ crud_surface = html.Div(
                     html.Label("Table"),
                     dcc.Dropdown(
                         id="crud-table",
-                        options=[{"label": t, "value": t} for t in CRUD_TABLES],
+                        options=[],
                         placeholder="Select table",
                         clearable=False,
                         style={"minWidth":"280px"},
@@ -672,8 +749,24 @@ crud_surface = html.Div(
                 ]),
                 html.Button("Refresh", id="crud-refresh", className="btn"),
                 html.Button("Add Row", id="crud-add", className="btn"),
-                html.Button("Delete Selected", id="crud-del", className="btn"),
+                html.Button("Delete Rows", id="crud-del", className="btn"),
                 html.Button("Save Changes", id="crud-save", className="btn btn-primary"),
+                html.Button("Copy Rows", id = "crud-copy-row", n_clicks = 0, className="btn"),
+                html.Button("Add Empty Rows", id = "crud-add-empty", n_clicks = 0, className="btn"),
+                dcc.Input(
+                    id="crud-add-empty-count",
+                    type="number",
+                    placeholder="add no. of rows",
+                    min=1,
+                    value=1,
+                    style={
+                        "width": "110px",
+                        "height": "30px",
+                        "fontSize": "12px",
+                        "marginLeft": "6px"
+                    }
+                ),
+                html.Button("Paste from Excel", id="crud-paste", className="btn"),
                 html.Button("History (table)", id="crud-history-table", className="btn"),
                 html.Button("History (row)", id="crud-history-row", className="btn"),
                 html.Button("Revert Selected to Version", id="crud-revert", className="btn"),
@@ -685,11 +778,26 @@ crud_surface = html.Div(
             columns=[],
             data=[],
             page_size=15,
+            sort_action="native",
+            filter_action="native",
+            sort_mode="multi",
             editable=True,
             row_selectable="multi",
             cell_selectable=True,
-            style_table={"maxHeight":"65vh","overflowY":"auto","marginTop":"10px"},
-            style_cell={"textAlign":"left","fontSize":"13px","padding":"6px 8px"},
+            style_table={"maxHeight":"65vh","overflowX":"auto","overflowY":"auto","marginTop":"10px"},
+            style_cell={
+                    "textAlign":"left",
+                    "fontSize":"13px",
+                    "padding":"6px 8px"
+                },
+
+                # ✅ Bold column headers
+                style_header={
+                    "fontWeight":"bold",
+                    "backgroundColor":"#f7f7f7"
+                },
+
+                
         ),
         html.Pre(id="crud-history-pre", style={"whiteSpace":"pre-wrap","maxHeight":"30vh","overflowY":"auto","marginTop":"12px"}),
         # Stores
@@ -697,6 +805,7 @@ crud_surface = html.Div(
         dcc.Store(id="crud-schema"),
         dcc.Store(id="crud-config"),
         dcc.Store(id="crud-deletes"),
+        dcc.Store(id="crud-clipboard"),
         dcc.Store(id="crud-history-data"),
         dcc.Store(id="crud-row-history"),
     ]
@@ -1041,6 +1150,26 @@ def render_selected(selected_esi, batch, components_map):
 # CRUD Tab Callbacks
 # =========================================
 @app.callback(
+    Output("crud-table", "options"),
+    Output("crud-toast", "children", allow_duplicate=True),
+    Input("main-tabs", "value"),
+    Input("crud-refresh", "n_clicks"),
+    prevent_initial_call=True,
+)
+def refresh_table_list(active_tab, _n_clicks):
+    # Only load when user is on the CRUD tab or explicitly refreshed
+    if active_tab != "tab-crud":
+        raise PreventUpdate
+    try:
+        fqns = list_uc_tables(UC_CATALOG, UC_SCHEMA)
+        options = [{"label": t.split(".")[-1], "value": t} for t in fqns]
+        if not options:
+            return [], "No tables found in the configured catalog/schema."
+        return options, f"Loaded {len(options)} tables from {UC_CATALOG}.{UC_SCHEMA}"
+    except Exception as e:
+        return [], f"Table list error: {e}"
+
+@app.callback(
     Output("crud-grid", "columns"),
     Output("crud-grid", "data"),
     Output("crud-original", "data"),
@@ -1054,26 +1183,71 @@ def render_selected(selected_esi, batch, components_map):
 def crud_load_table(table_name, _n_refresh):
     if not table_name:
         return [], [], None, None, None, "Select a table."
+
     short = table_name.split(".")[-1]
     cfg = TABLE_CONFIG.get(short, {"pk": None, "editable_cols": []})
     fqn = _fqn(table_name)
 
     try:
-        cols, data = crud_read_table(fqn, limit=500)
-        # Resolve editable cols
-        if cfg.get("editable_cols") == "ALL":
-            editable_cols = [c for c in cols if c != cfg.get("pk")]
-            cfg_resolved = {"pk": cfg.get("pk"), "editable_cols": editable_cols}
-        else:
-            cfg_resolved = {"pk": cfg.get("pk"), "editable_cols": cfg.get("editable_cols", [])}
-        if not cfg_resolved["pk"] or cfg_resolved["pk"] not in cols:
-            cfg_resolved["editable_cols"] = []
-            pk_msg = f" (read-only: PK '{cfg.get('pk')}' not found)" if cfg.get("pk") else " (read-only: no PK configured)"
-        else:
-            pk_msg = f" (pk={cfg_resolved['pk']})"
+        cols, data = crud_read_table(fqn, limit = 5000)
+        for r in data:
+            if isinstance(r, dict):
+                r["_row_id"] = str(uuid.uuid4())
+        pk = cfg.get("pk")
 
-        col_specs = [{"name": c, "id": c, "editable": c in cfg_resolved["editable_cols"]} for c in cols]
-        return col_specs, data, data, cols, cfg_resolved, f"Loaded {fqn}{pk_msg}. Rows: {len(data)}"
+        # ---- Resolve editable columns ----
+        if cfg.get("editable_cols") == "ALL":
+            if isinstance(pk, list):
+                editable_cols = [c for c in cols if c not in pk]
+            else:
+                editable_cols = [c for c in cols if c != pk]
+        elif not cfg.get("pk") and "id" in cols:
+            cfg["pk"] = "id"
+            cfg["editable_cols"] = [c for c in cols if c != "id"]
+        else:
+            editable_cols = cfg.get("editable_cols", [])
+
+        # ALWAYS create cfg_resolved
+        cfg_resolved = {"pk": pk, "editable_cols": editable_cols}
+
+        # ---- PK validation (supports composite keys) ----
+        if not pk:
+            cfg_resolved["editable_cols"] = []
+            pk_msg = " (read-only: no PK configured)"
+
+        elif isinstance(pk, list):
+            missing = [c for c in pk if c not in cols]
+            if missing:
+                cfg_resolved["editable_cols"] = []
+                pk_msg = f" (read-only: PK columns missing {missing})"
+            else:
+                pk_msg = f" (pk={', '.join(pk)})"
+
+        else:
+            if pk not in cols:
+                cfg_resolved["editable_cols"] = []
+                pk_msg = f" (read-only: PK '{pk}' not found)"
+            else:
+                pk_msg = f" (pk={pk})"
+        pk_set = set(pk if isinstance(pk, list) else ([pk] if pk else []))
+        col_specs = [
+            {
+                "name": c,
+                "id": c,
+                "editable": (c in cfg_resolved["editable_cols"]) or (c in pk_set),
+            }
+            for c in cols
+        ]
+
+        return (
+            col_specs,
+            data,
+            data,
+            cols,
+            cfg_resolved,
+            f"Loaded {fqn}{pk_msg}. Rows: {len(data)}",
+        )
+
     except Exception as e:
         return [], [], None, None, None, f"Load error: {e}"
 
@@ -1090,10 +1264,16 @@ def crud_add_row(_n, data, cols, cfg):
     data = list(data or [])
     cols = cols or []
     cfg = cfg or {"pk": None, "editable_cols": []}
+
     new_row = {c: None for c in cols}
-    if cfg.get("pk") == "id":  # convenience
+    new_row["_row_id"] = uuid4().hex
+    new_row["_new"] = True
+
+    # if you still want that convenience default:
+    if cfg.get("pk") == "id":
         new_row["id"] = uuid4().hex
-    data.append(new_row)
+
+    data.insert(0, new_row)
     return data, "Row added (not saved yet)."
 
 @app.callback(
@@ -1110,19 +1290,33 @@ def crud_add_row(_n, data, cols, cfg):
 def crud_delete_rows(_n, data, selected_rows, cfg, pending_deletes):
     if not data or not selected_rows:
         return no_update, no_update, "Select row(s) to delete."
+
     cfg = cfg or {"pk": None}
     pk = cfg.get("pk")
     if not pk:
         return no_update, no_update, "This table is read-only (no PK)."
-    pending_deletes = set(pending_deletes or [])
+
+    pending = set(pending_deletes or [])
     keep = []
+
     for i, row in enumerate(data):
         if i in selected_rows:
-            if pk in row and row[pk] is not None:
-                pending_deletes.add(row[pk])
+            if isinstance(pk, list):
+                # composite PK -> push dict
+                if all(k in row and row[k] is not None for k in pk):
+                    pending.add(tuple({k: row[k] for k in pk}.items()))
+            else:
+                # single PK -> push scalar
+                if pk in row and row[pk] is not None:
+                    pending.add(row[pk])
         else:
             keep.append(row)
-    return keep, list(pending_deletes), f"Marked {len(selected_rows)} row(s) for deletion (not saved yet)."
+
+    # Normalize (same as in save)
+    if isinstance(pk, list):
+        pending = [dict(x) if isinstance(x, tuple) else x for x in pending]
+
+    return keep, list(pending), f"Marked {len(selected_rows)} row(s) for deletion (not saved yet)."
 
 @app.callback(
     Output("crud-toast", "children", allow_duplicate=True),
@@ -1140,62 +1334,313 @@ def crud_delete_rows(_n, data, selected_rows, cfg, pending_deletes):
 def crud_save_changes(_n, table_name, current, original, cfg, cols, pending_deletes, versioning_mode):
     if not table_name:
         return "Select a table first.", no_update
+
     fqn = _fqn(table_name)
     cfg = cfg or {"pk": None, "editable_cols": []}
     pk = cfg.get("pk")
-    editable_cols = cfg.get("editable_cols") or []
-    if not pk or not editable_cols:
-        return "This table is read-only (missing PK or no editable columns).", no_update
+    editable_cols = list(cfg.get("editable_cols") or [])
+    cols = list(cols or [])
 
-    current = current or []
-    original = original or []
-    cols = cols or []
+    if not pk:
+        return "This table is read-only (missing PK).", no_update
 
-    def _by_pk(rows):
-        out = {}
-        for r in rows:
-            if pk in r and r[pk] is not None:
-                out[str(r[pk])] = r
-        return out
+    # For comparisons
+    current = list(current or [])
+    original = list(original or [])
+    pk_cols = pk if isinstance(pk, list) else [pk]
 
-    cur_by_pk = _by_pk(current)
-    org_by_pk = _by_pk(original)
-    org_keys   = set(org_by_pk.keys())
-    cur_keys   = set(cur_by_pk.keys())
+    # Build helpers
+    def _pk_dict(row):
+        return {k: row.get(k) for k in pk_cols}
+
+    def _same_pk(a, b):
+        return all((a.get(k) == b.get(k)) for k in pk_cols)
+
+    # Index originals by _row_id (fallback to PK string if needed)
+    def _row_key(r):
+        return r.get("_row_id") or ("PK:" + str(tuple(r.get(k) for k in pk_cols)))
+
+    orig_by_rowid = { _row_key(r): r for r in original }
+    curr_by_rowid = { _row_key(r): r for r in current }
+
+    # Compute sets
+    orig_keys = set(orig_by_rowid.keys())
+    curr_keys = set(curr_by_rowid.keys())
 
     inserts, updates = [], []
     deletes = set(pending_deletes or [])
 
-    # Inserts: new PK or PK missing
-    for r in current:
-        pk_val = r.get(pk)
-        if pk_val is None or str(pk_val) not in org_keys:
-            ins = {c: r.get(c) for c in cols if c in r}
+    # 1) New rows (present now, not in original) -> INSERT
+    for key in (curr_keys - orig_keys):
+        now = curr_by_rowid[key]
+        # sanity: ensure PK values present for insert
+        if any(now.get(k) in (None, "", []) for k in pk_cols):
+            return f"Insert aborted: missing PK value(s) {pk_cols} in a new row.", no_update
+        ins = {c: now.get(c) for c in cols if c in now}
+        inserts.append(ins)
+
+    # 2) Rows that existed before and still exist -> UPDATE or PK-change (delete+insert)
+    for key in (curr_keys & orig_keys):
+        before = orig_by_rowid[key]
+        after  = curr_by_rowid[key]
+
+        pk_changed = not _same_pk(_pk_dict(before), _pk_dict(after))
+
+        # columns that we allow to trigger update (editable + PK columns)
+        candidate_cols = set(editable_cols) | set(pk_cols)
+
+        changed = any(before.get(c) != after.get(c) for c in candidate_cols)
+
+        if not changed:
+            continue
+
+        if pk_changed:
+            # convert to delete (using original PK) + insert (using new state)
+            old_pk = _pk_dict(before)
+            if len(pk_cols) == 1:
+                # single PK: push scalar
+                deletes.add(before.get(pk_cols[0]))
+            else:
+                # composite: push dict of pk values
+                deletes.add(tuple(old_pk.items()))  # temp set-friendly
+                # we'll normalize to dicts below
+
+            # build full insert with new values
+            ins = {c: after.get(c) for c in cols if c in after}
             inserts.append(ins)
+        else:
+            # normal UPDATE (PK unchanged)
+            update_cols = set([*pk_cols, *editable_cols])
+            upd = {c: after.get(c) for c in update_cols if c in after}
+            updates.append(upd)
 
-    # Updates: changed editable cols
-    for k in (cur_keys & org_keys):
-        before = org_by_pk[k]; after = cur_by_pk[k]
-        if any(before.get(c) != after.get(c) for c in editable_cols):
-            updates.append({c: after.get(c) for c in set([pk] + editable_cols)})
+    # 3) Rows removed from the grid -> DELETE using original PKs
+    removed_keys = (orig_keys - curr_keys)
+    for key in removed_keys:
+        row = orig_by_rowid[key]
+        if len(pk_cols) == 1:
+            deletes.add(row.get(pk_cols[0]))
+        else:
+            deletes.add(tuple({k: row.get(k) for k in pk_cols}.items()))
 
-    # Deletes: removed vs original
-    removed_keys = org_keys - cur_keys
-    deletes.update(removed_keys)
+    # Normalize deletes to the shapes expected by _delete_rows:
+    # - single PK  -> list of scalars
+    # - composite -> list of dicts {pk1: val1, pk2: val2, ...}
+    if len(pk_cols) == 1:
+        deletes_payload = [d for d in deletes if not isinstance(d, tuple)]
+    else:
+        deletes_payload = []
+        for d in deletes:
+            if isinstance(d, dict):
+                deletes_payload.append(d)
+            elif isinstance(d, tuple):
+                deletes_payload.append(dict(d))
 
     try:
-        res = crud_apply_changes(fqn, pk, inserts, updates, list(deletes), versioning_mode=versioning_mode or "delta_audit")
-        msg = f"Saved — inserts: {res.get('inserted',0)}, updates: {res.get('updated',0)}, deletes: {res.get('deleted',0)}, version: {res.get('version')}"
+        res = crud_apply_changes(
+            fqn,
+            pk,
+            inserts,
+            updates,
+            deletes_payload,
+            versioning_mode=versioning_mode or "delta_audit",
+        )
+        msg = (
+            f"Saved — inserts: {res.get('inserted',0)}, "
+            f"updates: {res.get('updated',0)}, "
+            f"deletes: {res.get('deleted',0)}, "
+            f"version: {res.get('version')}"
+        )
     except Exception as e:
         return f"Save error: {e}", no_update
 
-    # Reload canonical data after save
+    # Reload canonical data after save so _row_id and originals resync
     try:
         _, fresh = crud_read_table(fqn, limit=500)
+        # Re-attach _row_id to the freshly loaded rows
+        for r in fresh:
+            if isinstance(r, dict):
+                r["_row_id"] = str(uuid.uuid4())
     except Exception:
         fresh = current
 
     return msg, fresh
+
+# Color edited rows callback
+@app.callback(
+    Output("crud-grid", "style_data_conditional"),
+    Input("crud-schema", "data"),
+    prevent_initial_call=True
+)
+def style_edited_cells(schema_cols):
+    """
+    Style rules:
+      - New rows (_new = true): entire row italic + #ECE8FD
+      - Existing rows with edits: only the edited cells (those whose column name appears in CSV string {_edited_columns})
+    """
+    schema_cols = list(schema_cols or [])
+    styles = []
+
+    # Entire NEW rows
+    styles.append({
+        "if": {"filter_query": "{_new} = true"},
+        "fontStyle": "italic",
+        "backgroundColor": "#F3E8FD",
+    })
+
+    # Edited cells: use "{_edited} = true && {_edited_columns} contains 'ColumnName'"
+    for c in schema_cols:
+        styles.append({
+            "if": {
+                "filter_query": "{_edited} = true && {_edited_columns} contains '" + c + "'",
+                "column_id": c,
+            },
+            "fontStyle": "italic",
+            "backgroundColor": "#F3E8FD",
+        })
+
+    return styles
+
+# Copy Callback
+
+@app.callback(
+    Output("crud-grid", "data", allow_duplicate=True),
+    Input("crud-copy-row", "n_clicks"),
+    State("crud-grid", "data"),
+    State("crud-grid", "selected_rows"),
+    prevent_initial_call=True
+)
+def copy_rows(n, rows, selected):
+
+    if not rows or not selected:
+        raise PreventUpdate
+
+    new_rows = rows.copy()
+
+    for i in selected:
+        new_row = rows[i].copy()
+
+        # create new unique row id
+        new_row["_row_id"] = str(uuid.uuid4())
+
+        new_row["_new"] = True
+        new_rows.insert(0, new_row)
+
+    return new_rows
+
+# Add Empty Rows Callback
+@app.callback(
+    Output("crud-grid", "data", allow_duplicate=True),
+    Input("crud-add-empty", "n_clicks"),
+    State("crud-grid", "data"),
+    State("crud-schema", "data"),
+    State("crud-add-empty-count", "value"),
+    prevent_initial_call=True
+)
+def add_empty_rows(n, rows, schema_cols, count):
+    if not n:
+        raise PreventUpdate
+
+    rows = list(rows or [])
+    schema_cols = list(schema_cols or [])
+    if not schema_cols:
+        raise PreventUpdate
+
+    count = int(count or 1)
+
+    for _ in range(max(1, count)):
+        empty = {c: "" for c in schema_cols}
+        empty["_row_id"] = uuid4().hex
+        empty["_new"] = True
+        rows.insert(0, empty)
+
+    return rows
+
+@app.callback(
+    Output("crud-grid", "data", allow_duplicate=True),
+    Output("crud-toast", "children", allow_duplicate=True),
+    Input("crud-clipboard", "data"),
+    State("crud-grid", "data"),
+    State("crud-schema", "data"),
+    prevent_initial_call=True
+)
+def apply_pasted_rows(payload, current, schema_cols):
+    if not payload:
+        raise PreventUpdate
+
+    err = payload.get("error")
+    pasted = payload.get("rows") or []
+    if err:
+        return no_update, f"Paste error: {err}"
+    if not pasted:
+        return no_update, "Nothing to paste."
+
+    current = list(current or [])
+    schema_cols = list(schema_cols or [])
+
+    # retain only schema-backed columns + our internal markers
+    allowed = set(schema_cols) | {"_row_id", "_new"}
+    cleaned = []
+    for r in pasted:
+        cleaned.append({k: v for k, v in r.items() if k in allowed})
+
+    # Prepend to grid
+    new_data = cleaned + current
+    return new_data, f"Pasted {len(cleaned)} row(s) from clipboard (not saved yet)."
+
+
+@app.callback(
+    Output("crud-grid", "data", allow_duplicate=True),
+    Input("crud-grid", "data_timestamp"),
+    State("crud-grid", "data"),
+    State("crud-original", "data"),
+    prevent_initial_call=True
+)
+def track_cell_edits(ts, rows, original):
+    if not rows or not original:
+        raise PreventUpdate
+
+    # map originals by stable key
+    orig_by_key = {}
+    for i, r in enumerate(original):
+        key = r.get("_row_id", i)
+        orig_by_key[key] = r
+
+    changed_any = False
+    new_rows = list(rows)
+
+    for i, row in enumerate(rows):
+        key = row.get("_row_id", i)
+        orig = orig_by_key.get(key)
+        if not orig:
+            # new row (no baseline to diff)
+            continue
+
+        # freeze keys to avoid "dict changed size" errors
+        edited_cols = []
+        for col in list(row.keys()):
+            if col.startswith("_"):
+                continue
+            if orig.get(col) != row.get(col):
+                edited_cols.append(col)
+
+        if edited_cols:
+            changed_any = True
+            updated = dict(row)  # copy before mutating
+            updated["_edited"] = True
+
+            # merge with any existing CSV list of edited columns
+            prev = set((updated.get("_edited_columns") or "").split(",")) if updated.get("_edited_columns") else set()
+            merged = [c for c in sorted(prev.union(edited_cols)) if c]
+            updated["_edited_columns"] = ",".join(merged)  # store as string
+
+            new_rows[i] = updated
+
+    if not changed_any:
+        raise PreventUpdate
+
+    return new_rows
+
 
 @app.callback(
     Output("crud-history-data", "data"),
@@ -1278,6 +1723,27 @@ def on_revert(_n, revert_ver, sel_rows, data, cfg, table_name):
         return f"Reverted {res.get('reverted',0)} row(s) to version {res.get('version')}"
     except Exception as e:
         return f"Revert error: {e}"
+
+
+
+# CLIENT SIDE CALLBACKS
+
+app.clientside_callback(
+    ClientsideFunction(namespace="utils", function_name="focusAddEmptyCount"),
+    Output("crud-toast", "children"),
+    Input("crud-add-empty", "n_clicks"),
+    prevent_initial_call=True
+)
+
+# Clipboard paste: read and parse on the client, drop into a Store
+app.clientside_callback(
+    ClientsideFunction(namespace="utils", function_name="pasteFromClipboard"),
+    Output("crud-clipboard", "data"),
+    Input("crud-paste", "n_clicks"),
+    State("crud-schema", "data"),   # we send the list of columns
+    prevent_initial_call=True
+)
+
 
 # =========================================
 # Main
